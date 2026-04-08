@@ -24,6 +24,9 @@ def guardar_datos(df):
 if "df" not in st.session_state:
     st.session_state.df = cargar_datos()
 
+if "edit_index" not in st.session_state:
+    st.session_state.edit_index = None
+
 df = st.session_state.df
 
 # =========================
@@ -35,7 +38,7 @@ usuario = st.sidebar.text_input("Tu nombre")
 ver_todos = st.sidebar.checkbox("Ver todos", True)
 
 # =========================
-# FORMULARIO
+# FORMULARIO NUEVO
 # =========================
 st.sidebar.markdown("---")
 st.sidebar.header("➕ Nueva tarea")
@@ -49,17 +52,55 @@ estado = st.sidebar.selectbox("Estado", [
 ])
 
 if st.sidebar.button("Agregar"):
-    nueva_fila = {
-        "Nombre": nombre,
-        "Fecha": str(fecha),
-        "Monto": monto,
-        "Encargado": encargado,
-        "Estado": estado
-    }
+    if nombre.strip() != "":
+        nueva_fila = {
+            "Nombre": nombre,
+            "Fecha": str(fecha),
+            "Monto": monto,
+            "Encargado": encargado,
+            "Estado": estado
+        }
 
-    st.session_state.df = pd.concat([df, pd.DataFrame([nueva_fila])], ignore_index=True)
-    guardar_datos(st.session_state.df)
-    st.rerun()
+        # 🚫 evitar duplicados
+        if not ((df["Nombre"] == nombre) & (df["Fecha"] == str(fecha))).any():
+            st.session_state.df = pd.concat(
+                [df, pd.DataFrame([nueva_fila])],
+                ignore_index=True
+            )
+            guardar_datos(st.session_state.df)
+            st.rerun()
+        else:
+            st.sidebar.warning("⚠️ Proyecto duplicado")
+
+# =========================
+# EDITAR
+# =========================
+if st.session_state.edit_index is not None:
+    i = st.session_state.edit_index
+    st.subheader("✏️ Editar tarea")
+
+    nombre_edit = st.text_input("Nombre", st.session_state.df.at[i, "Nombre"])
+    fecha_edit = st.text_input("Fecha", st.session_state.df.at[i, "Fecha"])
+    monto_edit = st.number_input("Monto", value=int(st.session_state.df.at[i, "Monto"]))
+    encargado_edit = st.text_input("Encargado", st.session_state.df.at[i, "Encargado"])
+    estado_edit = st.selectbox(
+        "Estado",
+        ["No iniciado", "En progreso", "Completado", "Cerrado-Pagado"],
+        index=["No iniciado", "En progreso", "Completado", "Cerrado-Pagado"].index(
+            st.session_state.df.at[i, "Estado"]
+        )
+    )
+
+    if st.button("Guardar cambios"):
+        st.session_state.df.at[i, "Nombre"] = nombre_edit
+        st.session_state.df.at[i, "Fecha"] = fecha_edit
+        st.session_state.df.at[i, "Monto"] = monto_edit
+        st.session_state.df.at[i, "Encargado"] = encargado_edit
+        st.session_state.df.at[i, "Estado"] = estado_edit
+
+        guardar_datos(st.session_state.df)
+        st.session_state.edit_index = None
+        st.rerun()
 
 # =========================
 # FILTRO
@@ -87,6 +128,8 @@ for estado, col, color in zip(estados, cols, colores):
         subset = df[df["Estado"] == estado]
 
         for idx, row in subset.iterrows():
+            fila_real = idx
+
             col_a, col_b = st.columns([4,1])
 
             with col_a:
@@ -105,19 +148,31 @@ for estado, col, color in zip(estados, cols, colores):
                 )
 
             with col_b:
+                # ⬅ mover izquierda
                 if estado != "No iniciado":
                     if st.button("⬅", key=f"left_{idx}"):
                         nuevo_estado = estados[estados.index(estado)-1]
-                        st.session_state.df.at[idx, "Estado"] = nuevo_estado
+                        st.session_state.df.at[fila_real, "Estado"] = nuevo_estado
                         guardar_datos(st.session_state.df)
                         st.rerun()
 
+                # ➡ mover derecha
                 if estado != "Cerrado-Pagado":
                     if st.button("➡", key=f"right_{idx}"):
                         nuevo_estado = estados[estados.index(estado)+1]
-                        st.session_state.df.at[idx, "Estado"] = nuevo_estado
+                        st.session_state.df.at[fila_real, "Estado"] = nuevo_estado
                         guardar_datos(st.session_state.df)
                         st.rerun()
+
+                # ✏️ editar
+                if st.button("✏️", key=f"edit_{idx}"):
+                    st.session_state.edit_index = fila_real
+
+                # 🗑 eliminar
+                if st.button("🗑", key=f"delete_{idx}"):
+                    st.session_state.df = st.session_state.df.drop(fila_real).reset_index(drop=True)
+                    guardar_datos(st.session_state.df)
+                    st.rerun()
 
 # =========================
 # RESUMEN
