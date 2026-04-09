@@ -20,7 +20,7 @@ def cargar_datos():
     
     if response.data:
         df = pd.DataFrame(response.data)
-        df.columns = df.columns.str.lower()  # 🔥 solución KeyError
+        df.columns = df.columns.str.lower()
         return df
     else:
         return pd.DataFrame(columns=["id","nombre","fecha","monto","encargado","estado"])
@@ -113,11 +113,25 @@ for estado, col, color in zip(estados, cols, colores):
 
         subset = df[df["estado"] == estado]
 
+        # 🔥 Totales por columna
+        total_monto = subset["monto"].sum()
+        cantidad = len(subset)
+
+        total_formateado = f"${int(total_monto):,}".replace(",", ".")
+
+        st.markdown(f"""
+        <div style='background-color:#f0f0f0;
+        padding:8px;border-radius:8px;margin-bottom:10px'>
+        <b>Total:</b> {total_formateado}<br>
+        <b>Proyectos:</b> {cantidad}
+        </div>
+        """, unsafe_allow_html=True)
+
         for _, row in subset.iterrows():
             col_a, col_b = st.columns([4,1])
 
             with col_a:
-                monto_formateado = f"{int(row['monto']):,}".replace(",", ".")
+                monto_formateado = f"${int(row['monto']):,}".replace(",", ".")
 
                 st.markdown(
                     f"""
@@ -126,7 +140,7 @@ for estado, col, color in zip(estados, cols, colores):
                     color:white;margin-bottom:10px'>
                     <b>{row['nombre']}</b><br>
                     📅 {row['fecha']}<br>
-                    💰 ${monto_formateado}<br>
+                    💰 {monto_formateado}<br>
                     👤 {row['encargado']}
                     </div>
                     """,
@@ -134,23 +148,19 @@ for estado, col, color in zip(estados, cols, colores):
                 )
 
             with col_b:
-                # ⬅ mover
                 if estado != "No iniciado":
                     if st.button("⬅", key=f"L{row['id']}"):
                         actualizar_estado(row["id"], estados[estados.index(estado)-1])
                         st.rerun()
 
-                # ➡ mover
                 if estado != "Cerrado-Pagado":
                     if st.button("➡", key=f"R{row['id']}"):
                         actualizar_estado(row["id"], estados[estados.index(estado)+1])
                         st.rerun()
 
-                # ✏️ editar
                 if st.button("✏️", key=f"E{row['id']}"):
                     st.session_state.edit_id = row["id"]
 
-                # 🗑 eliminar
                 if st.button("🗑", key=f"D{row['id']}"):
                     eliminar_dato(row["id"])
                     st.rerun()
@@ -165,7 +175,15 @@ if not df.empty:
     resumen = df.groupby("estado").agg({
         "nombre": "count",
         "monto": "sum"
-    }).rename(columns={"nombre": "Cantidad"})
+    }).rename(columns={
+        "nombre": "Cantidad",
+        "monto": "Total $"
+    })
+
+    # 🔥 Formato miles + $
+    resumen["Total $"] = resumen["Total $"].apply(
+        lambda x: f"${int(x):,}".replace(",", ".")
+    )
 
     st.dataframe(resumen, use_container_width=True)
 else:
