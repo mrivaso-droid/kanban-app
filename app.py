@@ -17,7 +17,13 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # =========================
 def cargar_datos():
     response = supabase.table("kanban").select("*").execute()
-    return pd.DataFrame(response.data)
+    
+    if response.data:
+        df = pd.DataFrame(response.data)
+        df.columns = df.columns.str.lower()  # 🔥 solución KeyError
+        return df
+    else:
+        return pd.DataFrame(columns=["id","nombre","fecha","monto","encargado","estado"])
 
 def agregar_dato(data):
     supabase.table("kanban").insert(data).execute()
@@ -75,12 +81,18 @@ if "edit_id" in st.session_state:
     nombre_e = st.text_input("Nombre", row["nombre"])
     monto_e = st.number_input("Monto", value=int(row["monto"]))
     encargado_e = st.text_input("Encargado", row["encargado"])
+    estado_e = st.selectbox(
+        "Estado",
+        ["No iniciado", "En progreso", "Completado", "Cerrado-Pagado"],
+        index=["No iniciado", "En progreso", "Completado", "Cerrado-Pagado"].index(row["estado"])
+    )
 
     if st.button("Guardar cambios"):
         editar_dato(st.session_state.edit_id, {
             "nombre": nombre_e,
             "monto": monto_e,
-            "encargado": encargado_e
+            "encargado": encargado_e,
+            "estado": estado_e
         })
         del st.session_state.edit_id
         st.rerun()
@@ -122,19 +134,23 @@ for estado, col, color in zip(estados, cols, colores):
                 )
 
             with col_b:
+                # ⬅ mover
                 if estado != "No iniciado":
                     if st.button("⬅", key=f"L{row['id']}"):
                         actualizar_estado(row["id"], estados[estados.index(estado)-1])
                         st.rerun()
 
+                # ➡ mover
                 if estado != "Cerrado-Pagado":
                     if st.button("➡", key=f"R{row['id']}"):
                         actualizar_estado(row["id"], estados[estados.index(estado)+1])
                         st.rerun()
 
+                # ✏️ editar
                 if st.button("✏️", key=f"E{row['id']}"):
                     st.session_state.edit_id = row["id"]
 
+                # 🗑 eliminar
                 if st.button("🗑", key=f"D{row['id']}"):
                     eliminar_dato(row["id"])
                     st.rerun()
@@ -152,3 +168,5 @@ if not df.empty:
     }).rename(columns={"nombre": "Cantidad"})
 
     st.dataframe(resumen, use_container_width=True)
+else:
+    st.info("No hay datos aún")
